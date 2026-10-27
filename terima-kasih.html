@@ -1,0 +1,14 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Terima Kasih</title><script src="theme.js"></script><link rel="stylesheet" href="page.css"></head><body><button id="th" aria-label="Mode gelap"></button><div class="wrap"><div class="card"><h1>Terima kasih! ✅</h1><p>Pesanan Anda sudah tercatat. Kode order:</p>
+<input id="code" readonly style="font:700 20px monospace"><p><b>Cara pembayaran</b></p><pre id="pay">Memuat…</pre>
+<form id="pf"><label><b>Sudah bayar? Unggah bukti</b> (JPG/PNG/WebP, maks 5 MB)</label><input type="file" id="pfile" accept="image/*" required><button class="btn" style="width:100%">Kirim Bukti Bayar</button></form>
+<p id="msg"></p><p><a id="wl" target="_blank">💬 Chat CS via WhatsApp</a> · <a href="index.html">Kembali ke beranda</a></p></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="config.js"></script><script>
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY),$=i=>document.getElementById(i),say=(t,c)=>{$('msg').textContent=t;$('msg').style.color=c||'inherit'};
+const code=new URLSearchParams(location.search).get('code')||'';$('code').value=code;if(!code){$('code').readOnly=false;$('code').placeholder='Masukkan kode order (ORD-XXXXXX)'}
+sb.from('site_settings').select('*').then(({data})=>{const c=Object.fromEntries((data||[]).map(r=>[r.key,r.value]));$('pay').textContent=c.payment_info||'Hubungi CS';$('wl').href='https://wa.me/'+c.whatsapp+'?text='+encodeURIComponent('Halo, kode order saya '+code)});
+$('pf').onsubmit=async e=>{e.preventDefault();const f=$('pfile').files[0],cd=$('code').value.trim();
+ if(!cd)return say('Isi kode order','#DC2626');if(!f||f.size>5*1048576||!/^image\//.test(f.type))return say('Gunakan gambar maks 5 MB','#DC2626');
+ const path=`${cd}/${Date.now()}_${f.name.replace(/[^\w.]/g,'_')}`,u=await sb.storage.from('payment-proofs').upload(path,f);if(u.error)return say('Unggah gagal: '+u.error.message,'#DC2626');
+ const r=await sb.rpc('attach_proof',{p_code:cd,p_path:path});if(r.error||!r.data)return say('Kode order tidak valid','#DC2626');
+ say('✅ Bukti bayar diterima. Kami akan mengabari via WhatsApp setelah dikonfirmasi.','#10B981');$('pf').hidden=true};
+</script></body></html>
