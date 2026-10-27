@@ -14,7 +14,7 @@ dialog{border:0;border-radius:20px;padding:20px;background:var(--card);color:var
 </style></head><body>
 <form id="login"><h2>Masuk Panel Admin</h2><input id="em" type="email" placeholder="Email" required><input id="pw" type="password" placeholder="Kata sandi" required><button style="width:100%">Masuk</button><p id="le" style="color:#DC2626"></p></form>
 <div id="app"><aside><b>Sales Page</b><a data-v="orders" class="on">Pesanan <span id="nb" class="b" style="background:var(--o);color:#fff;display:none"></span></a><a data-v="stats">Grafik &amp; Rekap</a>
-<a data-v="products" class="own">Produk &amp; Harga</a><a data-v="bonuses" class="own">Bonus</a><a data-v="testimonials" class="own">Testimoni</a><a data-v="faqs" class="own">FAQ</a><a data-v="site_settings" class="own">Pengaturan</a><a data-v="staff" class="own">Akun Admin</a><a id="th" style="cursor:pointer"></a><a id="out" style="color:#fca5a5">Keluar</a></aside>
+<a data-v="products" class="own">Produk &amp; Harga</a><a data-v="bonuses" class="own">Bonus</a><a data-v="testimonials" class="own">Testimoni</a><a data-v="faqs" class="own">FAQ</a><a data-v="site_settings" class="own">Pengaturan</a><a data-v="info_boxes" class="own">Kotak Info</a><a data-v="staff" class="own">Akun Admin</a><a id="th" style="cursor:pointer"></a><a id="out" style="color:#fca5a5">Keluar</a></aside>
 <main><h2 id="title">Pesanan</h2>
 <div id="v-orders"><div class="row"><input id="q" placeholder="Cari nama, WA, kode"><select id="fs"><option value="">Semua status</option><option value="menunggu">Menunggu</option><option value="bukti_diunggah">Bukti Diunggah</option><option value="lunas">Lunas</option><option value="ditolak">Ditolak</option></select><input id="fd" type="date"></div>
 <div class="card"><table><thead><tr><th>Kode<th>Nama<th>WhatsApp<th>Produk<th>Harga<th>Tanggal<th>Status<th></tr></thead><tbody id="ob"></tbody></table></div></div>
@@ -30,7 +30,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY),$=i=>document.get
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const toast=m=>{const t=$('t');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3500)};
 const FIELDS={products:['name','tagline','description','price:n','discount_price:n','features:j','images:a','is_active:b','sort_order:n'],bonuses:['title','description','value_label','deadline:d','is_active:b','sort_order:n'],
-testimonials:['name','rating:n','short_text','full_text','screenshot_url','is_active:b','sort_order:n'],faqs:['question','answer','is_active:b','sort_order:n'],site_settings:['key','value']};
+testimonials:['name','rating:n','short_text','full_text','screenshot_url','is_active:b','sort_order:n'],faqs:['question','answer','is_active:b','sort_order:n'],info_boxes:['section','title','description','sort_order:n','is_active:b'],site_settings:['key','value']};
 let role='admin',orders=[],cur=null,chart,me;
 $('login').onsubmit=async e=>{e.preventDefault();const {error}=await sb.auth.signInWithPassword({email:$('em').value,password:$('pw').value});if(error)$('le').textContent='Email atau kata sandi salah'};
 $('out').onclick=()=>sb.auth.signOut();
@@ -66,6 +66,11 @@ async function loadStaff(){const {data,error}=await sb.from('profiles').select('
 async function upStaff(id,o){if(id==me){toast('Akun sendiri tidak bisa diubah');return loadStaff()}const {error}=await sb.from('profiles').update(o).eq('id',id);toast(error?error.message:'Tersimpan');loadStaff()}
 $('sf').onsubmit=async e=>{e.preventDefault();const f=e.target,{data,error}=await sb.functions.invoke('create-staff',{body:{nama:f.n.value,email:f.e.value,password:f.p.value,role:f.r.value}});
  if(error||data?.error)return toast(data?.error||error.message);toast('Akun dibuat');sd.close();f.reset();loadStaff()};
+// Crop 1:1 (tengah), maks 1000px, kompres WebP hingga ≤ 1 MB. Logo (non-kotak): hanya diperkecil maks 600px.
+async function prep(file,sq){const bm=await createImageBitmap(file);let sx=0,sy=0,sw=bm.width,sh=bm.height;
+ if(sq){const m=Math.min(sw,sh);sx=(sw-m)/2;sy=(sh-m)/2;sw=sh=m}
+ const k=Math.min(1,(sq?1000:600)/Math.max(sw,sh)),c=document.createElement('canvas');c.width=Math.round(sw*k);c.height=Math.round(sh*k);c.getContext('2d').drawImage(bm,sx,sy,sw,sh,0,0,c.width,c.height);
+ for(let q=.9;q>.3;q-=.1){const b=await new Promise(r=>c.toBlob(r,'image/webp',q));if(b&&b.size<=1048576)return b}throw 0}
 let tbl='',rows=[];
 async function openTable(t){tbl=t;const {data,error}=await sb.from(t).select('*');if(error)return toast(error.message);rows=data;const pk=t=='site_settings'?'key':'id';
  $('ch2').innerHTML='<tr>'+FIELDS[t].map(f=>`<th>${f.split(':')[0]}`).join('')+'<th></tr>';
@@ -73,9 +78,8 @@ async function openTable(t){tbl=t;const {data,error}=await sb.from(t).select('*'
 $('add').onclick=()=>editRow(-1);
 function editRow(i){const r=i<0?{}:rows[i];$('ct').textContent=tbl;
  $('cf').innerHTML=FIELDS[tbl].map(f=>{const[n,k]=f.split(':'),v=r[n];return`<label>${n}</label>`+(k=='b'?`<select name="${f}"><option value="true"${v!==false?' selected':''}>Ya</option><option value="false"${v===false?' selected':''}>Tidak</option></select>`:k=='j'?`<textarea name="${f}">${esc(JSON.stringify(v??[]))}</textarea>`:k=='a'?`<input name="${f}" value="${esc((v||[]).join(','))}" placeholder="url1,url2">`:`<input name="${f}" type="${k=='n'?'number':k=='d'?'datetime-local':'text'}" value="${esc(k=='d'&&v?v.slice(0,16):v??'')}"${n=='key'&&i>=0?' readonly':''}>`)}).join('')+'<div class="row"><button>Simpan</button><button type="button" class="g" onclick="cd.close()">Batal</button></div>';
- [...$('cf').elements].filter(el=>/^(images|screenshot_url)/.test(el.name)).forEach(el=>{const u=document.createElement('input');u.type='file';u.accept='image/*';u.multiple=el.name.startsWith('images');el.after(u);
- u.onchange=async()=>{for(const file of u.files){if(file.size>5*1048576)return toast('Maks 5 MB per gambar');const path=`${tbl}/${Date.now()}_${file.name.replace(/[^\w.]/g,'_')}`;
-  const {error}=await sb.storage.from('public-assets').upload(path,file);if(error)return toast(error.message);const url=sb.storage.from('public-assets').getPublicUrl(path).data.publicUrl;el.value=el.name.startsWith('images')?[el.value,url].filter(Boolean).join(','):url}toast('Gambar terunggah — klik Simpan')}});
+ [...$('cf').elements].filter(el=>el.name.startsWith('value')?/logo|img|foto/.test(r.key||''):/^(images|screenshot_url)/.test(el.name)).forEach(el=>{const sqr=!el.name.startsWith('value'),u=document.createElement('input');u.type='file';u.accept='image/*';u.multiple=el.name.startsWith('images');el.after(u);
+ u.onchange=async()=>{for(const file of u.files){try{const blob=await prep(file,sqr),path=`${tbl}/${Date.now()}.webp`;const {error}=await sb.storage.from('public-assets').upload(path,blob,{contentType:'image/webp',cacheControl:'31536000'});if(error)return toast(error.message);const url=sb.storage.from('public-assets').getPublicUrl(path).data.publicUrl;el.value=el.name.startsWith('images')?[el.value,url].filter(Boolean).join(','):url}catch(x){return toast('Gambar tidak valid')}}toast('Gambar terunggah — klik Simpan')}});
  $('cf').onsubmit=async e=>{e.preventDefault();const o={};try{FIELDS[tbl].forEach(f=>{const[n,k]=f.split(':'),el=e.target.elements[f];let v=el.value;
   o[n]=k=='n'?(v===''?null:Number(v)):k=='b'?v=='true':k=='j'?JSON.parse(v):k=='a'?v.split(',').map(s=>s.trim()).filter(Boolean):k=='d'?(v?new Date(v).toISOString():null):v})}catch(x){return toast('Format JSON salah')}
   const pk=tbl=='site_settings'?'key':'id';const {error}=await(i<0?sb.from(tbl).insert(o):tbl=='site_settings'?sb.from(tbl).upsert(o):sb.from(tbl).update(o).eq(pk,r[pk]));
